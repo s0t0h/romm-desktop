@@ -429,8 +429,9 @@ is in there is [synced with RomM](#saves-synced-with-romm) around a launch.
 <saveDataPath>/<romId>/states/<name>.state
 ```
 
-The filename comes from the server, so a cached launch and an in-place launch
-land on one file. A detected RetroArch is passed `-s` and `-S`, overriding
+RetroArch names the save after the file it boots, and the shell syncs that
+file, so a disc out of a folder rom saves under the disc's name. The directory
+is per ROM either way. A detected RetroArch is passed `-s` and `-S`, overriding
 `savefile_directory` in your `retroarch.cfg`. Set `saveDataPath` to move the
 whole tree, a synced folder say. A configured emulator has to be told:
 

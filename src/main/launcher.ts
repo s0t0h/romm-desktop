@@ -1,6 +1,7 @@
 import { type BrowserWindow, type Session } from "electron";
 import { type ChildProcess, spawn } from "node:child_process";
 import { mkdir } from "node:fs/promises";
+import { join } from "node:path";
 import { toLaunchError } from "../shared/ipc.ts";
 import {
   type DesktopConfig,
@@ -563,7 +564,7 @@ export class Launcher {
     try {
       const config = await loadConfig();
       assertSeparateRoots(config);
-      const savePaths = resolveSavePaths(
+      let savePaths = resolveSavePaths(
         config.saveDataPath,
         request.romId,
         request.fileName,
@@ -719,6 +720,16 @@ export class Launcher {
           },
         });
         romPath = rom.path;
+      }
+
+      // RetroArch names the save after the file it boots. For a disc out of a
+      // folder rom, or a set's playlist, that is not the server's file.
+      if (savePaths && usesBuiltInRetroArch(config, request.platformSlug)) {
+        const base = contentStateBase(romPath);
+        savePaths = {
+          ...savePaths,
+          saveFile: join(savePaths.saveDir, `${base}.srm`),
+        };
       }
 
       if (savePaths) {
