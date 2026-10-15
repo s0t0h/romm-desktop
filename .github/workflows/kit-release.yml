@@ -41,11 +41,12 @@ jobs:
           git remote add upstream https://github.com/rommapp/desktop.git
           git fetch --no-tags upstream main
           git fetch --no-tags origin
+          # The list is read before the switch: lounge has no kit/ folder.
+          patches=$(grep -v '^\s*\(#\|$\)' kit/patches.txt)
           git switch -C lounge upstream/main
-          while read -r b; do
-            case "$b" in ''|'#'*) continue;; esac
+          for b in $patches; do
             git merge --no-edit "origin/$b"
-          done < kit/patches.txt
+          done
       - name: Decide whether anything changed
         id: v
         env:
