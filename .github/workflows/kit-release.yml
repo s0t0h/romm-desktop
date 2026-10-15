@@ -47,6 +47,17 @@ jobs:
           for b in $patches; do
             git merge --no-edit "origin/$b"
           done
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 26
+          cache: npm
+      # Upstream's checks run once, here on Linux. One upstream test compares
+      # a path with forward slashes and fails on Windows, which says nothing
+      # about the app, so the build jobs only package.
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npx eslint src --max-warnings 0
       - name: Decide whether anything changed
         id: v
         env:
@@ -94,11 +105,10 @@ jobs:
           node-version: 26
           cache: npm
       - run: npm ci
-      - run: npm run typecheck
-      - run: npm test
-      - run: npx eslint src --max-warnings 0
       - run: npm run build
-      - run: npx electron-builder ${{ matrix.target }} -c.extraMetadata.version=${{ needs.merge.outputs.version }}
+      # --publish never: electron-builder would otherwise try to publish on
+      # its own because it sees CI, and fail without a token.
+      - run: npx electron-builder ${{ matrix.target }} --publish never -c.extraMetadata.version=${{ needs.merge.outputs.version }}
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.os }}
