@@ -108,7 +108,9 @@ jobs:
       - run: npm run build
       # --publish never: electron-builder would otherwise try to publish on
       # its own because it sees CI, and fail without a token.
+      # bash on both runners: PowerShell splits the -c.extraMetadata argument.
       - run: npx electron-builder ${{ matrix.target }} --publish never -c.extraMetadata.version=${{ needs.merge.outputs.version }}
+        shell: bash
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.os }}
