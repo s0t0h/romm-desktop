@@ -2,6 +2,7 @@ import { BrowserWindow, app, dialog, shell } from "electron";
 import { join } from "node:path";
 import { type DesktopConfig } from "../shared/types.ts";
 import { loadConfig, updateConfig } from "./config.ts";
+import { installedLinkCores, linkPlayScript } from "./linkplay.ts";
 import { isSpikeMode, spikeScript } from "./spike.ts";
 import {
   classifyNavigation,
@@ -285,8 +286,27 @@ export function createMainWindow(
   );
   confineToServer(window, serverUrl);
   if (isSpikeMode()) installSpike(window);
+  installLinkPlay(window);
   void window.loadURL(serverUrl);
   return window;
+}
+
+/** Add the link-cable play button to pages that can use it (see linkplay.ts).
+ *  The installed cores are read per load, so a core copied into the cores
+ *  directory shows up after a reload rather than a restart. */
+function installLinkPlay(window: BrowserWindow): void {
+  window.webContents.on("did-finish-load", () => {
+    void loadConfig()
+      .then((config) =>
+        window.webContents.executeJavaScript(
+          linkPlayScript(installedLinkCores(config)),
+        ),
+      )
+      .then((result) => console.error(`[link-play] ${result}`))
+      .catch((error) =>
+        console.error("[link-play] injection failed", error),
+      );
+  });
 }
 
 /** TEMPORARY: see spike.ts. Remove with the harness. */
