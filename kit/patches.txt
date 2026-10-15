@@ -1,0 +1,5 @@
+# Branches of s0t0h/romm-desktop merged into the `lounge` build, one per
+# upstream PR. Remove a line once rommapp/desktop has merged that PR.
+library-single-disc-folder
+retroarch-save-name
+link-play

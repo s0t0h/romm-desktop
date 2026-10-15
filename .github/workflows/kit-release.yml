@@ -1,0 +1,125 @@
+# Weekly lounge build of RomM Desktop. Lives on the `kit` branch of
+# s0t0h/romm-desktop (the fork's default branch, so the schedule runs); the
+# copy of record is tools/kit/fork/kit-release.yml in the homeserver repo.
+#
+# Every Monday: `lounge` = upstream main + every branch in kit/patches.txt,
+# upstream's checks, Linux and Windows builds, one release tagged
+# v<version>-lounge.<run>. Nothing happens when upstream and the patches have
+# not moved since the last release. A merge conflict fails the run and GitHub
+# emails the fork's owner; the last release stays up.
+name: Kit release
+
+on:
+  schedule:
+    - cron: "17 4 * * 1"
+  workflow_dispatch:
+    inputs:
+      force:
+        description: Build even if nothing changed
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  merge:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      changed: ${{ steps.v.outputs.changed }}
+      sha: ${{ steps.v.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          ref: kit
+      - name: Rebuild lounge from upstream main plus the patch branches
+        run: |
+          git config user.name "lounge-kit"
+          git config user.email "lounge-kit@users.noreply.github.com"
+          git remote add upstream https://github.com/rommapp/desktop.git
+          git fetch --no-tags upstream main
+          git fetch --no-tags origin
+          git switch -C lounge upstream/main
+          while read -r b; do
+            case "$b" in ''|'#'*) continue;; esac
+            git merge --no-edit "origin/$b"
+          done < kit/patches.txt
+      - name: Decide whether anything changed
+        id: v
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FORCE: ${{ inputs.force }}
+        run: |
+          tree=$(git rev-parse HEAD^{tree})
+          last=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName 2>/dev/null || true)
+          last_tree=""
+          if [ -n "$last" ]; then
+            git fetch --no-tags origin "refs/tags/$last:refs/tags/$last" 2>/dev/null && last_tree=$(git rev-parse "$last^{tree}") || true
+          fi
+          base=$(node -p 'require("./package.json").version')
+          echo "version=$base-lounge.$GITHUB_RUN_NUMBER" >> "$GITHUB_OUTPUT"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          if [ "$tree" = "$last_tree" ] && [ "$FORCE" != "true" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"; echo "nothing new since $last"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Push lounge
+        if: steps.v.outputs.changed == 'true'
+        run: git push --force origin lounge
+
+  build:
+    needs: merge
+    if: needs.merge.outputs.changed == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: --linux
+          - os: windows-latest
+            target: --win
+    runs-on: ${{ matrix.os }}
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: 1
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.merge.outputs.sha }}
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 26
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npx eslint src --max-warnings 0
+      - run: npm run build
+      - run: npx electron-builder ${{ matrix.target }} -c.extraMetadata.version=${{ needs.merge.outputs.version }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.os }}
+          path: |
+            release/*.AppImage
+            release/*.zip
+          if-no-files-found: error
+
+  release:
+    needs: [merge, build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - name: Tag and release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.merge.outputs.version }}
+          SHA: ${{ needs.merge.outputs.sha }}
+        run: |
+          gh release create "v$VERSION" artifacts/* \
+            --repo "$GITHUB_REPOSITORY" --target "$SHA" --title "RomM Desktop $VERSION (lounge)" \
+            --notes "Upstream rommapp/desktop main plus the lounge's open patches, built for the lounge kit. Source for this build: https://github.com/$GITHUB_REPOSITORY/tree/$SHA (AGPL-3.0). Unsigned: Windows shows a SmartScreen warning the first time."
