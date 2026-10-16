@@ -169,6 +169,13 @@ export function retroarchLaunchConfig(settings: LaunchSettings): string | null {
   }
 
   if (lines.length === 0) return null;
+
+  // RetroArch saves its main config on exit by default, and what it saves is
+  // the merged state, appended file included. Without this line one launch's
+  // save directories and interval become every later session's, RomM Desktop
+  // or not. The setting only governs this run's exit; the user's own value in
+  // retroarch.cfg is not touched.
+  lines.push('config_save_on_exit = "false"');
   return [...GENERATED_HEADER, ...lines, ""].join("\n");
 }
 

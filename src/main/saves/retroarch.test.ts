@@ -112,6 +112,17 @@ test("a path an --appendconfig list cannot express is declined", async () => {
   );
 });
 
+test("a launch's config is not written back into the user's retroarch.cfg", () => {
+  // RetroArch saves the merged config on exit by default, appended file
+  // included; one launch's directories would otherwise become every later
+  // session's. Seen on 2026-10-16 with the Flatpak RetroArch.
+  const written =
+    retroarchLaunchConfig({ autosaveSeconds: 0, saveDir: "/data/4755/saves" }) ?? "";
+  assert.match(written, /^config_save_on_exit = "false"$/m);
+  // Still nothing at all when there is nothing to pin.
+  assert.equal(retroarchLaunchConfig({ autosaveSeconds: 0 }), null);
+});
+
 test("a launch pins the directories its saves and states belong in", () => {
   // The deprecated flags name the files but lose to a savefile_directory, a
   // sorting option or "save files in content directory" in the user's own
