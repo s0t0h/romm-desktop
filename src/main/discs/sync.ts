@@ -10,8 +10,9 @@
 // Nothing here can fail a launch. A server that will not answer, a rom whose
 // files cannot be read, a set with fewer than two discs, and a transfer that
 // fails all return null, and the caller falls back to the single-payload
-// download it would have done. Only a cancellation stays fatal, that one being
-// the user's own.
+// download it would have done. A single disc already in the library is
+// launched from there instead. Only a cancellation stays fatal, that one
+// being the user's own.
 
 import { type Session } from "electron";
 import { mkdir, rename, rm, stat, utimes, writeFile } from "node:fs/promises";
@@ -105,8 +106,12 @@ export async function syncDiscSet({
 
   const files = readRomFiles(body);
   const discs = selectDiscs(files);
-  // One disc is an ordinary launch, and the caller's own download handles it
-  // without a playlist in the way.
+  // One disc is an ordinary launch, booted without a playlist. A folder rom's
+  // path never matches the caller's library check, so look for the disc here.
+  if (discs.length === 1) {
+    const paths = libraryPaths(selectStagedFiles(files), config.libraryPath);
+    return paths?.get((discs[0] as DiscFile).id) ?? null;
+  }
   if (discs.length < 2) return null;
 
   // One disc of the set, where the page's disc selector picked one. Booted on
